@@ -3,33 +3,19 @@ const usersRouter = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const client = require ('../client/client');
+const verifyJWT = require ('../middleware/auth');
 
 const secreToken = "toctoken";
 
-const verifyJWT = (req, res, next) => {
-    const token = req.headers["x-access-token"];
-    if (!token) {
-        res.send("Token manquant !!");
-    } else {
-        jwt.verify(token, "jwtSecret", (err, decoded) => {
-            if (err) {
-                console.log(err);
-                res.json({ auth: false, message: "Authentification échouée !!"});
-            } else {
-                req.userId = decoded.id;
-                next();
-            }
-        });
-    }
-};
 
-usersRouter.get('/',async (req,res) => {
+
+usersRouter.get('/',verifyJWT,async (req,res) => {
     try {
         
         const sql = 'select user_name from users';
 
         const data = await client.query(sql);
-
+        
         res.status(200).json({status:"OK",data: {post : data.rows}})
 
     } catch (error) {
@@ -74,8 +60,6 @@ usersRouter.post('/register', async (req, res) => {
 
 usersRouter.post('/login', async (req, res) => {
     try {
-
-
         const user_name = req.body.user_name;
         const password = req.body.password;
 
@@ -86,14 +70,15 @@ usersRouter.post('/login', async (req, res) => {
         console.log(resultName);
 
         if (resultName) {
-            const sqlPassword = 'select password from users where user_name = $1';
-            const dataPassword = await client.query(sqlPassword, [user_name]);
+            const sqlPassword = 'select password,user_id from users where user_name = $1';
 
-            const hash = dataPassword.rows[0].password;
-            console.log(hash);
+            const data = await client.query(sqlPassword, [user_name]);
+
+            const hash = data.rows[0].password;
             bcrypt.compare(password, hash, function (err, result) {
-                
-                const token = jwt.sign({user_name},"jwtSecret",{expiresIn:"1h"});
+                const id = data.rows[0].user_id;
+                const token = jwt.sign({id},secreToken,);//{expiresIn:10}
+
                 console.log(token);
 
                 result ? res.status(200).json({status:"OK",auth: true,token : token,message : `Bonjour ${user_name}`}) : res.status(401).json({status:"Unauthorized",message : `Mot de passe ne correpond pas !!`}) ;
